@@ -1,0 +1,93 @@
+service: poor-webook
+
+provider:
+  name: aws
+  runtime: python3.6
+  memorySize: 128
+
+  environment:
+    CLIENT_ID: ${file(local.yml):slack.clientId}
+    CLIENT_SECRET: ${file(local.yml):slack.clientSecret}
+    VERIFICATION_TOKEN: ${file(local.yml):slack.verificationToken}
+
+package:
+  exclude:
+    - test.py
+
+functions:
+  hears:
+    handler: handler.hears
+    events:
+      - http:
+          path: listening
+          method: get
+      - http:
+          path: listening
+          method: post
+  install:
+    handler: handler.install
+    events:
+      - http:
+          path: install
+          method: get
+  thanks:
+    handler: handler.thanks
+    events:
+      - http:
+          path: thanks
+          method: get
+  github:
+    handler: handler.github_webhook
+    events:
+      - http:
+          path: github
+          method: post
+      - http:
+          path: github
+          method: get
+
+resources:
+  Resources:
+    DynamoDbTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: poor-webhook-tokens
+        AttributeDefinitions:
+          - AttributeName: account_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: account_id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+    DynamoDbTable1:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: poor-webhook-events
+        AttributeDefinitions:
+          - AttributeName: X-Github-Delivery
+            AttributeType: S
+        KeySchema:
+          - AttributeName: X-Github-Delivery
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+    DynamoDBIamPolicy:
+      Type: AWS::IAM::Policy
+      DependsOn: DynamoDbTable
+      Properties:
+        PolicyName: lambda-poor-webhook-dynamodb
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Resource: arn:aws:dynamodb:*:*:table/poor-webhook-*
+        Roles:
+          - Ref: IamRoleLambdaExecution
+plugins:
+  - serverless-python-requirements
